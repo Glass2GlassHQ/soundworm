@@ -1,0 +1,33 @@
+[package]
+name    = "soundworm-daemon"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "swd"
+path = "src/main.rs"
+
+[dependencies]
+soundworm-core          = { path = "../core" }
+soundworm-graph         = { path = "../graph" }
+soundworm-policy        = { path = "../policy" }
+soundworm-rhai          = { path = "../rhai-engine" }
+soundworm-observability = { path = "../observability" }
+soundworm-snapshots     = { path = "../snapshots" }
+soundworm-ipc           = { path = "../ipc" }
+tokio              = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow             = { workspace = true }
+notify             = { workspace = true }
+
+# Per-target backend selection. PipeWire on Linux, CoreAudio on macOS,
+# WASAPI on Windows. `main.rs` picks the active backend via cfg.
+[target.'cfg(target_os = "linux")'.dependencies]
+soundworm-pipewire = { path = "../pipewire-backend" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+soundworm-coreaudio = { path = "../coreaudio-backend" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+soundworm-wasapi = { path = "../wasapi-backend" }

@@ -1,0 +1,17 @@
+[package]
+name    = "soundworm-coreaudio"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soundworm-core = { path = "../core" }
+async-trait    = { workspace = true }
+tracing        = { workspace = true }
+tokio          = { workspace = true }
+anyhow         = { workspace = true }
+
+# Real HAL bindings only on macOS. On other targets the backend is a
+# stub that returns errors — daemon selects backends per-target so this
+# code only runs on macOS in practice.
+[target.'cfg(target_os = "macos")'.dependencies]
+coreaudio-sys = "0.2"

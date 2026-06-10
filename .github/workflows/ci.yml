@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  linux:
+    name: linux / pipewire
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:41
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: |
+          dnf install -y \
+            gcc gcc-c++ make pkg-config \
+            pipewire-devel clang-devel \
+            rust cargo
+      - name: cargo build
+        run: cargo build --workspace --all-targets
+      - name: cargo test
+        run: cargo test --workspace
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+        continue-on-error: true
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: true
+
+  macos:
+    name: macos / coreaudio
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo build (excluding linux-only crate)
+        run: |
+          cargo build --workspace --all-targets \
+            --exclude soundworm-pipewire
+      - name: cargo test (excluding linux-only crate)
+        run: |
+          cargo test --workspace \
+            --exclude soundworm-pipewire
+
+  windows:
+    name: windows / wasapi (stub)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Windows excludes the unix backends *and* the daemon/CLI — their
+      # IPC transport is unix-socket-only. Named-pipe support lands with
+      # WASAPI in v0.6. The IPC wire types and other portable crates
+      # still build here so we catch regressions early.
+      - name: cargo build (portable crates only)
+        run: |
+          cargo build --workspace --all-targets `
+            --exclude soundworm-pipewire `
+            --exclude soundworm-coreaudio `
+            --exclude soundworm-daemon `
+            --exclude soundworm-cli
+      - name: cargo test (portable crates only)
+        run: |
+          cargo test --workspace `
+            --exclude soundworm-pipewire `
+            --exclude soundworm-coreaudio `
+            --exclude soundworm-daemon `
+            --exclude soundworm-cli
