@@ -1,0 +1,31 @@
+[package]
+name = "soundworm-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soundworm-policy = { path = "../crates/policy" }
+soundworm-rhai = { path = "../crates/rhai-engine" }
+soundworm-core = { path = "../crates/core" }
+
+[[bin]]
+name = "rules_toml"
+path = "fuzz_targets/rules_toml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rhai_script"
+path = "fuzz_targets/rhai_script.rs"
+test = false
+doc = false
+bench = false
+
+# Detached from the parent workspace, as cargo-fuzz expects.
+[workspace]
