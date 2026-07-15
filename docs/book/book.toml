@@ -1,0 +1,10 @@
+[book]
+title = "soundworm"
+authors = ["Aaron Boxer"]
+description = "User guide for the soundworm audio router."
+src = "src"
+language = "en"
+
+[output.html]
+default-theme = "navy"
+git-repository-url = "https://github.com/GrokImageCompression/soundworm"
