@@ -340,7 +340,51 @@ async fn do_link(
     if let Err(e) = state.backend.create_link(&link).await {
         return err(id, ErrorCode::BackendError, &e.to_string());
     }
-    ok(id, ResponseData::Link { link_id: link.id })
+    // create_link is fire-and-forget: the real link id is assigned by
+    // PipeWire and reaches the graph via the LinkAppeared registry
+    // event. Wait for it so the client gets the actual id (needed to
+    // Unlink later) instead of the placeholder 0.
+    let link_id = wait_for_link(state, link.source_port.clone(), link.sink_port.clone())
+        .await
+        .unwrap_or_else(|| {
+            tracing::warn!(
+                src_port = link.source_port.0,
+                sink_port = link.sink_port.0,
+                "link created but no LinkAppeared within timeout; returning id 0"
+            );
+            LinkId(0)
+        });
+    ok(id, ResponseData::Link { link_id })
+}
+
+/// Poll the graph until the just-created link's registry event lands,
+/// returning its real id. ~1s ceiling so a wedged backend can't hang the
+/// request.
+async fn wait_for_link(
+    state: &Arc<DaemonState>,
+    source: PortId,
+    sink: PortId,
+) -> Option<LinkId> {
+    for _ in 0..50 {
+        // Scope the guard so it drops before the await (MutexGuard isn't
+        // Send); materialize an owned id so no borrow of the graph escapes.
+        let found = {
+            let graph = state.graph.lock().unwrap();
+            let mut id = None;
+            for l in graph.links() {
+                if l.source_port == source && l.sink_port == sink {
+                    id = Some(l.id.clone());
+                    break;
+                }
+            }
+            id
+        };
+        if found.is_some() {
+            return found;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    None
 }
 
 async fn do_unlink(id: u64, state: &Arc<DaemonState>, link_id: LinkId) -> Response {

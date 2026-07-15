@@ -20,7 +20,7 @@ use soundworm_core::{
 // Commands sent from the main thread into the PipeWire loop thread.
 enum PwCmd {
     CreateLink { output_port: u32, input_port: u32, output_node: u32, input_node: u32 },
-    DestroyLink { proxy_id: u32 },
+    DestroyLink { global_id: u32 },
     Quit,
 }
 
@@ -129,6 +129,7 @@ fn pw_thread(
     let core_for_cmd = core.clone();
     let _live_proxies_for_cmd = live_proxies.clone();
     let live_links_for_cmd = live_links.clone();
+    let registry_for_cmd = registry.clone();
     let port_to_node_for_cmd = port_to_node.clone();
     // Track link factory name.
     let factory_name: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
@@ -196,11 +197,16 @@ fn pw_thread(
                 tracing::warn!("PipeWire: no link factory known yet");
             }
         }
-        PwCmd::DestroyLink { proxy_id } => {
-            if let Some(link) = live_links_for_cmd.borrow_mut().remove(&proxy_id) {
-                if let Err(e) = core_for_cmd.destroy_object(link) {
-                    tracing::error!("PipeWire: destroy_link failed: {}", e);
-                }
+        PwCmd::DestroyLink { global_id } => {
+            // Destroy by registry global id — the id clients hold via
+            // ListLinks. The cached proxy in live_links is keyed by its
+            // client-side proxy id, which differs from the global id, so
+            // destroy_object could never find it. destroy_global needs no
+            // proxy. Drop any cached proxy for the same id too; created
+            // links (object.linger=1) survive proxy drop regardless.
+            live_links_for_cmd.borrow_mut().remove(&global_id);
+            if let Err(e) = registry_for_cmd.destroy_global(global_id).into_result() {
+                tracing::error!("PipeWire: destroy_link {global_id} failed: {e}");
             }
         }
     });
@@ -569,7 +575,7 @@ impl AudioBackend for PipeWireBackend {
     }
 
     async fn destroy_link(&self, link: &Link) -> Result<()> {
-        self.cmd_tx.send(PwCmd::DestroyLink { proxy_id: link.id.0 as u32 })
+        self.cmd_tx.send(PwCmd::DestroyLink { global_id: link.id.0 as u32 })
             .map_err(|_| SoundwormError::Backend("PW thread closed".into()))
     }
 
