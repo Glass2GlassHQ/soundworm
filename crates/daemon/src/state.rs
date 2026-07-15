@@ -339,6 +339,9 @@ fn to_ipc_event(e: &BackendEvent) -> Option<IpcEvent> {
         BackendEvent::PortAppeared(_)
         | BackendEvent::PortRemoved(_)
         | BackendEvent::LatencySample { .. } => None,
+        // BackendEvent is non_exhaustive: an unmodeled kind isn't
+        // forwarded to subscribers rather than breaking the build.
+        _ => None,
     }
 }
 
@@ -352,6 +355,8 @@ pub fn event_kind(e: &IpcEvent) -> &'static str {
         IpcEvent::LinkRejected { .. } => "LinkRejected",
         IpcEvent::EventsDropped { .. } => "EventsDropped",
         IpcEvent::XrunObserved { .. } => "XrunObserved",
+        // Event is non_exhaustive; label unknown kinds rather than break.
+        _ => "Unknown",
     }
 }
 

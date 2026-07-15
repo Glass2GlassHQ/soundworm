@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SoundwormError {
     #[error("Node not found: {0}")]
     NodeNotFound(String),

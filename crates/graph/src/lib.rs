@@ -113,6 +113,9 @@ impl AudioGraph {
             // Observability-only events: no graph mutation. Daemon
             // routes them into the metrics/xrun stores instead.
             BackendEvent::Xrun { .. } | BackendEvent::LatencySample { .. } => {}
+            // BackendEvent is non_exhaustive; a future kind the graph
+            // doesn't model is a no-op rather than a build break.
+            _ => {}
         }
     }
 }

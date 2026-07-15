@@ -158,6 +158,7 @@ pub struct ProtoError {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ErrorCode {
     UnknownOp,
     BadRequest,
@@ -177,6 +178,7 @@ impl std::fmt::Display for ErrorCode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind")]
+#[non_exhaustive]
 pub enum Event {
     NodeAppeared { node: Node },
     NodeRemoved { node_id: NodeId },

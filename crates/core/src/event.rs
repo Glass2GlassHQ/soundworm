@@ -1,6 +1,9 @@
 use crate::{link::Link, node::Node, port::Port, link::LinkId, node::NodeId, port::PortId};
 
+// Non-exhaustive: backends gain event kinds over time (the profiler POD
+// path, per-device events); downstream matchers must tolerate unknowns.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum BackendEvent {
     NodeAppeared(Node),
     NodeRemoved(NodeId),

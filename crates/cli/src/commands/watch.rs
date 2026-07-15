@@ -23,6 +23,9 @@ pub async fn run() -> Result<()> {
             Event::XrunObserved { node_id, gap_ms } => {
                 println!("xrun node={} gap={:.2}ms", node_id.0, gap_ms)
             }
+            // Event is non_exhaustive; a newer daemon may send kinds this
+            // client predates.
+            _ => println!("(unrecognized event)"),
         }
     }
     Ok(())
