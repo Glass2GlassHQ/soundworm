@@ -62,10 +62,13 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
+      # Force the gnu target: cargo-fuzz otherwise picks musl on this
+      # runner, whose static libc is incompatible with the sanitizer
+      # (and whose std isn't installed).
       - name: Fuzz rules TOML parser
-        run: cargo fuzz run rules_toml -- -max_total_time=30
+        run: cargo fuzz run --target x86_64-unknown-linux-gnu rules_toml -- -max_total_time=30
       - name: Fuzz rhai script parser
-        run: cargo fuzz run rhai_script -- -max_total_time=30 -timeout=10
+        run: cargo fuzz run --target x86_64-unknown-linux-gnu rhai_script -- -max_total_time=30 -timeout=10
 
   windows:
     name: windows / wasapi (stub)
