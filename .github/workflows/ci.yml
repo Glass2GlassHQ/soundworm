@@ -70,6 +70,28 @@ jobs:
       - name: Fuzz rhai script parser
         run: cargo fuzz run --target x86_64-unknown-linux-gnu rhai_script -- -max_total_time=30 -timeout=10
 
+  semver:
+    name: semver-checks (advisory)
+    runs-on: ubuntu-latest
+    # Advisory only: pre-1.0 allows breaking changes and there's no
+    # crates.io baseline yet, so this reports against the PR base and
+    # never blocks the merge.
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+      - name: Public-API diff vs base branch
+        run: |
+          cargo semver-checks \
+            --baseline-rev "origin/${{ github.base_ref }}" \
+            --workspace --exclude soundworm-pipewire
+
   windows:
     name: windows / wasapi (stub)
     runs-on: windows-latest
