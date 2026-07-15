@@ -8,4 +8,6 @@ soundworm-core = { path = "../core" }
 async-trait    = { workspace = true }
 tracing        = { workspace = true }
 tokio          = { workspace = true }
-# windows = { version = "0.52", features = ["Win32_Media_Audio"] }   # uncomment on Windows
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_System_Com"] }
