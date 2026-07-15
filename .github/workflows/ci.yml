@@ -49,6 +49,24 @@ jobs:
           cargo test --workspace \
             --exclude soundworm-pipewire
 
+  fuzz:
+    name: fuzz / parsers
+    runs-on: ubuntu-latest
+    env:
+      # cargo-fuzz injects its own sanitizer flags; the repo-wide
+      # -D warnings would deny lints in dependency builds and fail here.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Fuzz rules TOML parser
+        run: cargo fuzz run rules_toml -- -max_total_time=30
+      - name: Fuzz rhai script parser
+        run: cargo fuzz run rhai_script -- -max_total_time=30 -timeout=10
+
   windows:
     name: windows / wasapi (stub)
     runs-on: windows-latest
