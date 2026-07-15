@@ -24,6 +24,7 @@ export const saveLayout = (positions) => invoke("save_layout", { positions });
 export const listSnapshots   = () => invoke("list_snapshots");
 export const saveSnapshot    = (name) => invoke("save_snapshot", { name });
 export const restoreSnapshot = (name) => invoke("restore_snapshot", { name });
+export const deleteSnapshot  = (name) => invoke("delete_snapshot", { name });
 
 // Per-node latency percentiles + xrun counts. Polled for the overlay.
 export const getMetrics = () => invoke("get_metrics");

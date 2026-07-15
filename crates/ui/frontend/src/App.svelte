@@ -7,7 +7,7 @@
   import {
     listNodes, listLinks, socketPath, onSwdEvent,
     createLink, deleteLink, loadLayout, saveLayout,
-    listSnapshots, saveSnapshot, restoreSnapshot, getMetrics,
+    listSnapshots, saveSnapshot, restoreSnapshot, deleteSnapshot, getMetrics,
   } from "./swd.js";
   import { layoutNodes } from "./layout.js";
   import MetricsNode from "./MetricsNode.svelte";
@@ -222,6 +222,16 @@
     }
   }
 
+  async function onDeleteSnapshot(name) {
+    try {
+      await deleteSnapshot(name);
+      await refreshSnapshots();
+      pushEvent({ kind: "SnapshotDeleted", data: { name } });
+    } catch (e) {
+      status = `snapshot delete failed: ${e}`;
+    }
+  }
+
   async function onRestoreSnapshot(name) {
     try {
       const { applied, skipped } = await restoreSnapshot(name);
@@ -409,6 +419,7 @@
             <li class="snap-row">
               <span class="snap-name">{s}</span>
               <button class="restore" onclick={() => onRestoreSnapshot(s)}>Restore</button>
+              <button class="del" title="delete snapshot" onclick={() => onDeleteSnapshot(s)}>✕</button>
             </li>
           {:else}
             <li class="muted">none saved</li>
@@ -514,6 +525,12 @@
   .snap-row .snap-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .snap-row .restore { background: transparent; color: var(--accent); border: 1px solid var(--border); }
   .snap-row .restore:hover { border-color: var(--accent); }
+  .snap-row .del {
+    flex-shrink: 0; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 7px; font-size: 11px; cursor: pointer;
+  }
+  .snap-row .del:hover { color: #ff8080; border-color: #ff8080; }
 
   /* Dark-theme overrides for Svelte Flow's default widgets. */
   :global(.svelte-flow__controls) {

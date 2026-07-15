@@ -248,6 +248,21 @@ async fn restore_snapshot(
     }
 }
 
+#[tauri::command]
+async fn delete_snapshot(name: String) -> Result<(), String> {
+    // Snapshot names are plain file stems; reject anything that could
+    // escape the snapshots dir before touching the filesystem.
+    if name.is_empty() || name.contains(['/', '\\']) || name.contains("..") {
+        return Err("invalid snapshot name".into());
+    }
+    let path = data_dir().join("snapshots").join(format!("{name}.json"));
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 async fn run_event_pump(app: AppHandle) -> Result<()> {
     let path = default_socket_path();
     let mut rx = connect_subscriber(&path, None).await?;
@@ -312,7 +327,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             list_nodes, list_ports, list_links, socket_path,
             create_link, delete_link, load_layout, save_layout,
-            list_snapshots, save_snapshot, restore_snapshot, get_metrics,
+            list_snapshots, save_snapshot, restore_snapshot, delete_snapshot, get_metrics,
             read_config, write_config, apply_rules, apply_script,
         ])
         .run(tauri::generate_context!())
