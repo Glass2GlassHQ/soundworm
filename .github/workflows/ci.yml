@@ -127,15 +127,15 @@ jobs:
             --workspace --exclude soundworm-pipewire
 
   windows:
-    name: windows / wasapi (stub)
+    name: windows / wasapi
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # Windows excludes the unix backends *and* the daemon/CLI — their
-      # IPC transport is unix-socket-only. Named-pipe support lands with
-      # WASAPI in v0.6. The IPC wire types and other portable crates
-      # still build here so we catch regressions early.
+      # Windows excludes the unix backends *and* the daemon/CLI: their
+      # IPC transport is unix-socket-only (named-pipe support is a v0.6
+      # track). The WASAPI backend, IPC wire types, and other portable
+      # crates build here so we catch regressions early.
       - name: cargo build (portable crates only)
         run: |
           cargo build --workspace --all-targets `
