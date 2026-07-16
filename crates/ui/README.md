@@ -24,12 +24,12 @@ Plus Cargo and the Tauri CLI:
 
 ## Frontend deps
 
-Node 22+ and npm. From `crates/ui/frontend/`:
+Node 22+ and pnpm. From `crates/ui/frontend/`:
 
-    npm install
-    npm run build         # produces frontend/dist consumed by Tauri release builds
+    pnpm install
+    pnpm run build        # produces frontend/dist consumed by Tauri release builds
 
-`cargo tauri dev` runs `npm run dev` for you via `beforeDevCommand`.
+`cargo tauri dev` runs `pnpm run dev` for you via `beforeDevCommand`.
 
 ## Run
 
@@ -41,7 +41,7 @@ Then from `crates/ui/`:
 
     cargo tauri dev
 
-Or, after `npm run build`, build the binary directly:
+Or, after `pnpm run build`, build the binary directly:
 
     cargo build -p soundworm-ui --manifest-path crates/ui/Cargo.toml
 

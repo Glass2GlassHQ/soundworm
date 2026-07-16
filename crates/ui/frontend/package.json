@@ -21,5 +21,6 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5",
     "vite": "^6"
-  }
+  },
+  "packageManager": "pnpm@11.8.0"
 }

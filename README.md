@@ -63,8 +63,8 @@ Run the daemon, then the UI:
     RUST_LOG=info cargo run --bin swd          # terminal 1
     cd crates/ui && cargo tauri dev            # terminal 2
 
-`cargo tauri dev` runs the Vite dev server (`npm install` first in
-`crates/ui/frontend/`). For a release binary, `npm run build` the
+`cargo tauri dev` runs the Vite dev server (`pnpm install` first in
+`crates/ui/frontend/`). For a release binary, `pnpm run build` the
 frontend, then:
 
     cargo build -p soundworm-ui --manifest-path crates/ui/Cargo.toml
