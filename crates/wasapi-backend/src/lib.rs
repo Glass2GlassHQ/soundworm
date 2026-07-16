@@ -101,4 +101,16 @@ impl AudioBackend for WasapiBackend {
             Err(SoundwormError::Backend("wasapi unavailable on this target".into()))
         }
     }
+
+    async fn set_mute(&self, node_id: u64, mute: bool) -> Result<()> {
+        #[cfg(target_os = "windows")]
+        {
+            win::set_endpoint_mute(node_id, mute)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (node_id, mute);
+            Err(SoundwormError::Backend("wasapi unavailable on this target".into()))
+        }
+    }
 }

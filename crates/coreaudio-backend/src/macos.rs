@@ -10,8 +10,9 @@
 //! and per-stream volume via `kAudioDevicePropertyVolumeScalar`.
 
 use coreaudio_sys::{
-    kAudioDevicePropertyDeviceName, kAudioDevicePropertyNominalSampleRate,
-    kAudioDevicePropertyStreams, kAudioHardwarePropertyDefaultOutputDevice,
+    kAudioDevicePropertyDeviceName, kAudioDevicePropertyMute,
+    kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams,
+    kAudioDevicePropertyVolumeScalar, kAudioHardwarePropertyDefaultOutputDevice,
     kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal,
     kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput,
     kAudioObjectSystemObject, AudioDeviceID, AudioObjectGetPropertyData,
@@ -199,13 +200,50 @@ impl Inner {
         Ok(())
     }
 
+    /// Set the device master output volume (0..1). Uses the main element
+    /// on the output scope; devices that expose only per-stream volume
+    /// return an error, which the caller surfaces.
     pub fn set_volume(&self, node_id: u64, volume: f32) -> Result<()> {
         let dev = node_id_to_device_id(node_id)?;
-        let v = volume.clamp(0.0, 1.0);
-        // TODO(v0.5-mac): walk the output streams of `dev` and
-        // AudioObjectSetPropertyData(kAudioDevicePropertyVolumeScalar)
-        // on each. Some devices only expose master volume.
-        tracing::info!("coreaudio set_volume device={dev} volume={v} (stub)");
+        let mut v = volume.clamp(0.0, 1.0);
+        let addr = address(kAudioDevicePropertyVolumeScalar, kAudioObjectPropertyScopeOutput);
+        let st = unsafe {
+            AudioObjectSetPropertyData(
+                dev,
+                &addr,
+                0,
+                ptr::null(),
+                mem::size_of::<f32>() as u32,
+                &mut v as *mut f32 as *const c_void,
+            )
+        };
+        if st != 0 {
+            return Err(SoundwormError::Backend(format!(
+                "set volume device {dev} failed: OSStatus {st}"
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn set_mute(&self, node_id: u64, mute: bool) -> Result<()> {
+        let dev = node_id_to_device_id(node_id)?;
+        let mut m: u32 = mute.into();
+        let addr = address(kAudioDevicePropertyMute, kAudioObjectPropertyScopeOutput);
+        let st = unsafe {
+            AudioObjectSetPropertyData(
+                dev,
+                &addr,
+                0,
+                ptr::null(),
+                mem::size_of::<u32>() as u32,
+                &mut m as *mut u32 as *const c_void,
+            )
+        };
+        if st != 0 {
+            return Err(SoundwormError::Backend(format!(
+                "set mute device {dev} failed: OSStatus {st}"
+            )));
+        }
         Ok(())
     }
 }

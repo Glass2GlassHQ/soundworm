@@ -10,4 +10,5 @@ pub trait AudioBackend: Send + Sync {
     async fn create_link(&self, link: &Link) -> Result<()>;
     async fn destroy_link(&self, link: &Link) -> Result<()>;
     async fn set_volume(&self, node_id: u64, volume: f32) -> Result<()>;
+    async fn set_mute(&self, node_id: u64, mute: bool) -> Result<()>;
 }

@@ -58,6 +58,8 @@ pub enum Op {
     ListLinks,
     Link { source: PortRef, sink: PortRef },
     Unlink { link_id: LinkId },
+    SetVolume { node: NodeId, volume: f32 },
+    SetMute { node: NodeId, mute: bool },
     Subscribe { filter: Option<EventFilter> },
     Unsubscribe,
     LoadRules { path: String },

@@ -143,6 +143,14 @@ async fn dispatch(req: Request, ctx: &mut ClientCtx) -> Response {
         }
         Op::Link { source, sink } => do_link(id, &ctx.state, source, sink).await,
         Op::Unlink { link_id } => do_unlink(id, &ctx.state, link_id).await,
+        Op::SetVolume { node, volume } => match ctx.state.backend.set_volume(node.0, volume).await {
+            Ok(()) => ok(id, ResponseData::Empty {}),
+            Err(e) => err(id, ErrorCode::BackendError, &e.to_string()),
+        },
+        Op::SetMute { node, mute } => match ctx.state.backend.set_mute(node.0, mute).await {
+            Ok(()) => ok(id, ResponseData::Empty {}),
+            Err(e) => err(id, ErrorCode::BackendError, &e.to_string()),
+        },
         Op::Subscribe { filter } => do_subscribe(id, ctx, filter),
         Op::Unsubscribe => {
             if let Some(h) = ctx.sub_handle.take() {

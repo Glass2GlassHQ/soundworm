@@ -59,4 +59,10 @@ impl AudioBackend for MockBackend {
             .push(format!("vol {} {:.2}", node_id, volume));
         Ok(())
     }
+
+    async fn set_mute(&self, node_id: u64, mute: bool) -> Result<()> {
+        self.link_calls.lock().unwrap()
+            .push(format!("mute {} {}", node_id, mute));
+        Ok(())
+    }
 }

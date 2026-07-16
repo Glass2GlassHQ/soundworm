@@ -94,4 +94,16 @@ impl AudioBackend for CoreAudioBackend {
             Err(SoundwormError::Backend("coreaudio unavailable on this target".into()))
         }
     }
+
+    async fn set_mute(&self, node_id: u64, mute: bool) -> Result<()> {
+        #[cfg(target_os = "macos")]
+        {
+            self.inner.set_mute(node_id, mute)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (node_id, mute);
+            Err(SoundwormError::Backend("coreaudio unavailable on this target".into()))
+        }
+    }
 }

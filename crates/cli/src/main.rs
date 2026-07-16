@@ -15,6 +15,8 @@ async fn main() -> Result<()> {
         "list"     => commands::list::run(in_process).await,
         "link"     => commands::link::run(&args, in_process).await,
         "unlink"   => commands::link::unlink(&args, in_process).await,
+        "volume"   => commands::volume::volume(&args).await,
+        "mute"     => commands::volume::mute(&args).await,
         "watch"    => commands::watch::run().await,
         "snapshot" => commands::snapshot::run(&args).await,
         "rules"    => commands::rules::run(&args).await,
@@ -28,6 +30,8 @@ async fn main() -> Result<()> {
             println!("  sw list                     List audio nodes (via daemon)");
             println!("  sw link   <src> <sink>      Create route (via daemon)");
             println!("  sw unlink <link-id>         Remove route (via daemon)");
+            println!("  sw volume <node> <0..1>     Set node volume (via daemon)");
+            println!("  sw mute   <node> <on|off>   Mute/unmute node (via daemon)");
             println!("  sw watch                    Stream live events from daemon");
             println!("  sw snapshot save <name>     Save session (via daemon)");
             println!("  sw snapshot load <name>     Restore session (via daemon)");

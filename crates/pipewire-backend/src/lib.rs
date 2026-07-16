@@ -1,5 +1,8 @@
 use async_trait::async_trait;
 use pipewire as pw;
+use pw::spa::param::ParamType;
+use pw::spa::pod::{serialize::PodSerializer, Object, Pod, Property, Value, ValueArray};
+use pw::spa::utils::SpaTypes;
 use pw::{proxy::ProxyT, types::ObjectType};
 use std::{
     cell::{Cell, RefCell},
@@ -21,7 +24,34 @@ use soundworm_core::{
 enum PwCmd {
     CreateLink { output_port: u32, input_port: u32, output_node: u32, input_node: u32 },
     DestroyLink { global_id: u32 },
+    SetVolume { node_id: u32, volume: f32, channels: usize },
+    SetMute { node_id: u32, mute: bool },
     Quit,
+}
+
+// Serialize a Props object carrying `properties` into a POD byte buffer.
+fn props_pod(properties: Vec<Property>) -> Option<Vec<u8>> {
+    let value = Value::Object(Object {
+        type_: SpaTypes::ObjectParamProps.as_raw(),
+        id: ParamType::Props.as_raw(),
+        properties,
+    });
+    PodSerializer::serialize(std::io::Cursor::new(Vec::new()), &value)
+        .ok()
+        .map(|(cursor, _len)| cursor.into_inner())
+}
+
+// Apply a Props POD to a node proxy via set_param(Props).
+fn set_node_props(node: &pw::node::Node, properties: Vec<Property>) {
+    let Some(bytes) = props_pod(properties) else {
+        tracing::error!("PipeWire: failed to serialize Props POD");
+        return;
+    };
+    let Some(pod) = Pod::from_bytes(&bytes) else {
+        tracing::error!("PipeWire: serialized Props POD did not parse back");
+        return;
+    };
+    node.set_param(ParamType::Props, 0, pod);
 }
 
 pub struct PipeWireBackend {
@@ -101,6 +131,10 @@ fn pw_thread(
     // Per-node info listeners (NodeListener isn't a ProxyT).
     let live_node_listeners: Rc<RefCell<HashMap<u32, pw::node::NodeListener>>> =
         Rc::new(RefCell::new(HashMap::new()));
+    // Node proxies kept for set_param (volume/mute). Bound per node global;
+    // keeping the proxy alive also keeps its info listener live.
+    let node_proxies: Rc<RefCell<HashMap<u32, pw::node::Node>>> =
+        Rc::new(RefCell::new(HashMap::new()));
     // Last latency reading per node — used to debounce LatencySample emission.
     let last_latency_ms: Rc<RefCell<HashMap<u32, f32>>> =
         Rc::new(RefCell::new(HashMap::new()));
@@ -131,6 +165,7 @@ fn pw_thread(
     let live_links_for_cmd = live_links.clone();
     let registry_for_cmd = registry.clone();
     let port_to_node_for_cmd = port_to_node.clone();
+    let node_proxies_for_cmd = node_proxies.clone();
     // Track link factory name.
     let factory_name: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
     let factory_name_cmd = factory_name.clone();
@@ -209,11 +244,43 @@ fn pw_thread(
                 tracing::error!("PipeWire: destroy_link {global_id} failed: {e}");
             }
         }
+        PwCmd::SetVolume { node_id, volume, channels } => {
+            match node_proxies_for_cmd.borrow().get(&node_id) {
+                Some(node) => {
+                    // The `volume` arg is the perceptual 0..1 control value
+                    // (matching the WASAPI/CoreAudio scalar and the pavucontrol
+                    // slider). PipeWire's channelVolumes is linear gain, related
+                    // cubically, so cube the control value before applying.
+                    let control = volume.clamp(0.0, 1.0);
+                    let linear = control * control * control;
+                    let vols = vec![linear; channels.max(1)];
+                    set_node_props(
+                        node,
+                        vec![Property::new(
+                            pw::spa::sys::SPA_PROP_channelVolumes,
+                            Value::ValueArray(ValueArray::Float(vols)),
+                        )],
+                    );
+                }
+                None => tracing::warn!(node_id, "PipeWire: set_volume for unknown node"),
+            }
+        }
+        PwCmd::SetMute { node_id, mute } => {
+            match node_proxies_for_cmd.borrow().get(&node_id) {
+                Some(node) => set_node_props(
+                    node,
+                    vec![Property::new(pw::spa::sys::SPA_PROP_mute, Value::Bool(mute))],
+                ),
+                None => tracing::warn!(node_id, "PipeWire: set_mute for unknown node"),
+            }
+        }
     });
 
     let registry_weak = registry.downgrade();
     let live_for_reg = live_proxies.clone();
     let listeners_for_reg = live_node_listeners.clone();
+    let node_proxies_for_reg = node_proxies.clone();
+    let node_proxies_for_remove = node_proxies.clone();
     let last_latency_for_reg = last_latency_ms.clone();
     let last_xrun_for_reg = last_xrun_count.clone();
     let factory_for_reg = factory_name.clone();
@@ -333,7 +400,9 @@ fn pw_thread(
                         })
                         .register();
                     listeners_for_reg.borrow_mut().insert(global.id, listener);
-                    live_for_reg.borrow_mut().insert(global.id, Box::new(node_proxy));
+                    // Keep the node proxy in its own map so set_param
+                    // (volume/mute) can reach it; this also keeps it alive.
+                    node_proxies_for_reg.borrow_mut().insert(global.id, node_proxy);
                 }
                 ObjectType::Port => {
                     let props = global.props.as_ref();
@@ -392,6 +461,7 @@ fn pw_thread(
             let kind = global_kinds_for_remove.borrow_mut().remove(&id);
             match kind {
                 Some(GlobalKind::Node) => {
+                    node_proxies_for_remove.borrow_mut().remove(&id);
                     broadcast(
                         &sinks_remove,
                         BackendEvent::NodeRemoved(NodeId(id as u64)),
@@ -579,8 +649,23 @@ impl AudioBackend for PipeWireBackend {
             .map_err(|_| SoundwormError::Backend("PW thread closed".into()))
     }
 
-    async fn set_volume(&self, _node_id: u64, _volume: f32) -> Result<()> {
-        Ok(()) // v0.4 scope
+    async fn set_volume(&self, node_id: u64, volume: f32) -> Result<()> {
+        let channels = self
+            .nodes
+            .lock()
+            .unwrap()
+            .get(&(node_id as u32))
+            .map(|n| n.channels as usize)
+            .unwrap_or(2);
+        self.cmd_tx
+            .send(PwCmd::SetVolume { node_id: node_id as u32, volume, channels })
+            .map_err(|_| SoundwormError::Backend("PW thread closed".into()))
+    }
+
+    async fn set_mute(&self, node_id: u64, mute: bool) -> Result<()> {
+        self.cmd_tx
+            .send(PwCmd::SetMute { node_id: node_id as u32, mute })
+            .map_err(|_| SoundwormError::Backend("PW thread closed".into()))
     }
 }
 

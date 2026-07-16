@@ -5,4 +5,5 @@ pub mod rules;
 pub mod script;
 pub mod shutdown;
 pub mod snapshot;
+pub mod volume;
 pub mod watch;

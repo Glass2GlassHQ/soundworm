@@ -183,9 +183,9 @@ impl DaemonState {
 
                     if let BackendEvent::NodeAppeared(ref node) = event {
                         if let Some(action) = evaluate_node(&this, node) {
-                            handle_action(&this, node.id.clone(), action, &mut pending);
+                            handle_action(&this, &handle, node.id.clone(), action, &mut pending);
                         } else if let Some((rule_name, action)) = evaluate_script(&this, node) {
-                            handle_action(&this, node.id.clone(), (rule_name, action), &mut pending);
+                            handle_action(&this, &handle, node.id.clone(), (rule_name, action), &mut pending);
                         }
                     }
 
@@ -242,6 +242,7 @@ fn evaluate_script(state: &DaemonState, node: &soundworm_core::node::Node) -> Op
 
 fn handle_action(
     state: &DaemonState,
+    handle: &tokio::runtime::Handle,
     node_id: soundworm_core::node::NodeId,
     (rule_name, action): (String, soundworm_policy::rules::Action),
     pending: &mut std::collections::HashMap<soundworm_core::node::NodeId, PendingRoute>,
@@ -261,7 +262,13 @@ fn handle_action(
             });
         }
         Action::SetVolume { volume } => {
-            tracing::info!("rule '{}' set_volume {} (not yet implemented)", rule_name, volume);
+            let backend = state.backend.clone();
+            let nid = node_id.0;
+            handle.spawn(async move {
+                if let Err(e) = backend.set_volume(nid, volume).await {
+                    tracing::warn!("rule '{rule_name}' set_volume failed: {e}");
+                }
+            });
         }
         Action::Notify { message } => {
             tracing::info!("rule '{}' notify: {}", rule_name, message);

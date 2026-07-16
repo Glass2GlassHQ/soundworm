@@ -257,6 +257,21 @@ pub(crate) fn set_endpoint_volume(target: u64, volume: f32) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn set_endpoint_mute(target: u64, mute: bool) -> Result<()> {
+    unsafe {
+        let enumerator = create_enumerator()?;
+        let id = endpoint_id_for_hash(&enumerator, target).ok_or_else(|| {
+            SoundwormError::Backend(format!("wasapi: no endpoint for node {target}"))
+        })?;
+        let wide = to_wide(&id);
+        let device = enumerator.GetDevice(PCWSTR(wide.as_ptr())).map_err(com_err)?;
+        let endpoint_volume: IAudioEndpointVolume =
+            device.Activate(CLSCTX_ALL, None).map_err(com_err)?;
+        endpoint_volume.SetMute(mute, ptr::null()).map_err(com_err)?;
+    }
+    Ok(())
+}
+
 // Live device notifications. The MMDevice API delivers these on a system
 // MTA thread; the callback builds a `Node` (via the enumerator it holds)
 // and fans it out to every subscriber channel. This mirrors the official
