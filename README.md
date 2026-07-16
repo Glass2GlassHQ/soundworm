@@ -3,7 +3,7 @@
 Cross-platform audio session manager and router, written in Rust.
 Primary target: Fedora / PipeWire.
 
-Repo: https://github.com/GrokImageCompression/soundworm
+Repo: https://github.com/Glass2GlassHQ/soundworm
 
 ## Crates
 
@@ -12,12 +12,21 @@ Repo: https://github.com/GrokImageCompression/soundworm
 - policy           TOML rules engine, conflict resolution, sessions
 - rhai-engine      Scriptable routing (Rhai)
 - pipewire-backend Linux PipeWire backend (primary)
-- coreaudio-backend macOS CoreAudio backend (stub)
-- wasapi-backend   Windows WASAPI backend (stub)
+- coreaudio-backend macOS CoreAudio backend (HAL device list + default-device routing)
+- wasapi-backend   Windows WASAPI backend (endpoint list, default-endpoint routing, volume, device notifications)
 - observability    Xrun log, latency metrics
 - snapshots        JSON session save/load
+- ipc              Daemon IPC wire types (NDJSON over a Unix socket; see docs/IPC.md)
 - cli              `sw` command-line tool
 - daemon           `swd` background service
+- ui               Tauri desktop UI (node-graph canvas; not in the default workspace)
+
+Backend coverage: PipeWire is the primary, fully-featured backend.
+CoreAudio and WASAPI are compile-verified on CI and implement enumeration,
+routing (set the default endpoint, since neither OS exposes port-to-port
+linking) and volume; on-hardware validation still needs a real Mac /
+Windows box. Windows routing uses the undocumented `IPolicyConfig`
+interface (see `crates/wasapi-backend/src/win.rs`).
 
 ## Quick Start (Fedora)
 
@@ -35,6 +44,30 @@ Repo: https://github.com/GrokImageCompression/soundworm
     cp contrib/systemd/soundworm.service ~/.config/systemd/user/
     systemctl --user enable --now soundworm
     systemctl --user status soundworm
+
+## Desktop UI (Tauri)
+
+A Tauri 2 desktop app renders the live graph as a node canvas (nodes by
+media-class, drag to link/reconnect/unlink) over the `swd` IPC socket.
+It's outside the default workspace, so build it explicitly. See
+`crates/ui/README.md` for details.
+
+Build deps (Fedora):
+
+    sudo dnf install webkit2gtk4.1-devel gtk3-devel \
+                     libsoup3-devel javascriptcoregtk4.1-devel librsvg2-devel
+    cargo install tauri-cli --version '^2.0'
+
+Run the daemon, then the UI:
+
+    RUST_LOG=info cargo run --bin swd          # terminal 1
+    cd crates/ui && cargo tauri dev            # terminal 2
+
+`cargo tauri dev` runs the Vite dev server (`npm install` first in
+`crates/ui/frontend/`). For a release binary, `npm run build` the
+frontend, then:
+
+    cargo build -p soundworm-ui --manifest-path crates/ui/Cargo.toml
 
 ## Routing Rules
 

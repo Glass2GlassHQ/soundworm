@@ -184,7 +184,7 @@
       <li><a href="#routing">Routing</a></li>
       <li><a href="#install">Install</a></li>
       <li><a href="#cli">CLI</a></li>
-      <li><a href="https://github.com/GrokImageCompression/soundworm" class="nav-gh">GitHub</a></li>
+      <li><a href="https://github.com/Glass2GlassHQ/soundworm" class="nav-gh">GitHub</a></li>
       <li><a href="https://crates.io/crates/soundworm-core" class="nav-crates">crates.io</a></li>
     </ul>
   </div>
@@ -200,7 +200,7 @@
   <p>Rules-driven audio routing for Linux, macOS, and Windows. Sub-100 ms reaction time, Rhai scripting, session snapshots, and full observability. Written in Rust.</p>
   <div class="hero-btns">
     <a class="btn-primary" href="#install">Get started</a>
-    <a class="btn-secondary" href="https://github.com/GrokImageCompression/soundworm">View on GitHub →</a>
+    <a class="btn-secondary" href="https://github.com/Glass2GlassHQ/soundworm">View on GitHub →</a>
   </div>
   <div class="hero-stats">
     <div class="stat"><div class="stat-n">&lt;<span>100</span>ms</div><div class="stat-l">reaction time</div></div>
@@ -314,21 +314,22 @@ Node 14  latency=<span class="c-amber">2.1</span>ms  cpu=<span class="c-amber">0
         <tr>
           <td>macOS</td>
           <td>CoreAudio</td>
-          <td><span class="badge badge-green">✓ stable</span></td>
-          <td><span class="badge badge-amber">⚠ app-level</span></td>
-          <td><span class="badge badge-green">✓ stable</span></td>
+          <td><span class="badge badge-blue">~ CI-built</span></td>
+          <td><span class="badge badge-amber">⚠ default only</span></td>
+          <td><span class="badge badge-blue">~ CI-built</span></td>
           <td><span class="badge badge-blue">~ partial</span></td>
         </tr>
         <tr>
           <td>Windows</td>
           <td>WASAPI</td>
-          <td><span class="badge badge-green">✓ stable</span></td>
-          <td><span class="badge badge-amber">⚠ session-level</span></td>
-          <td><span class="badge badge-green">✓ stable</span></td>
+          <td><span class="badge badge-blue">~ CI-built</span></td>
+          <td><span class="badge badge-amber">⚠ default only</span></td>
+          <td><span class="badge badge-blue">~ CI-built</span></td>
           <td><span class="badge badge-blue">~ partial</span></td>
         </tr>
       </tbody>
     </table>
+    <p class="section-sub" style="margin-top:20px;font-size:.85rem">PipeWire is the primary, hardware-validated backend. CoreAudio and WASAPI are compile-verified on CI and implement enumeration, default-endpoint routing, volume, and device events; on-hardware validation needs a real Mac / Windows box.</p>
   </div>
 </section>
 
@@ -345,9 +346,10 @@ Node 14  latency=<span class="c-amber">2.1</span>ms  cpu=<span class="c-amber">0
         <div class="arch-row">
           <div class="arch-pill hi">CLI (sw)</div>
           <div class="arch-pill hi">Daemon (swd)</div>
+          <div class="arch-pill hi">Desktop UI (Tauri)</div>
           <div class="arch-pill hi">Your App</div>
         </div>
-        <div class="arch-arrow">│ Unix socket (JSON-RPC)  /  direct library call │</div>
+        <div class="arch-arrow">│ Unix socket (NDJSON)  /  direct library call │</div>
         <div class="arch-row">
           <div class="arch-pill hi2">soundworm-graph</div>
           <div class="arch-pill hi2">soundworm-policy</div>
@@ -596,12 +598,12 @@ systemctl --user status soundworm</div>
       soundworm
     </div>
     <div class="footer-links">
-      <a href="https://github.com/GrokImageCompression/soundworm">GitHub</a>
+      <a href="https://github.com/Glass2GlassHQ/soundworm">GitHub</a>
       <a href="https://crates.io/crates/soundworm-core">crates.io</a>
       <a href="https://docs.rs/soundworm-core">docs.rs</a>
-      <a href="https://github.com/GrokImageCompression/soundworm/issues">Issues</a>
-      <a href="https://github.com/GrokImageCompression/soundworm/blob/master/LICENSE-MIT">MIT</a>
-      <a href="https://github.com/GrokImageCompression/soundworm/blob/master/LICENSE-APACHE">Apache-2.0</a>
+      <a href="https://github.com/Glass2GlassHQ/soundworm/issues">Issues</a>
+      <a href="https://github.com/Glass2GlassHQ/soundworm/blob/master/LICENSE-MIT">MIT</a>
+      <a href="https://github.com/Glass2GlassHQ/soundworm/blob/master/LICENSE-APACHE">Apache-2.0</a>
     </div>
     <div class="footer-copy">Built with Rust. Powered by PipeWire, CoreAudio, and WASAPI.</div>
   </div>
