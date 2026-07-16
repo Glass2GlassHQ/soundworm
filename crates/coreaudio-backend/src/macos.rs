@@ -5,26 +5,29 @@
 //! the HAL has no port-to-port linking). Compile-verified on macOS CI;
 //! on-hardware runtime still needs a real Mac.
 //!
-//! Not yet done: a HAL property-listener thread (CFRunLoop +
-//! AudioObjectAddPropertyListener) to emit live NodeAppeared/NodeRemoved,
-//! and per-stream volume via `kAudioDevicePropertyVolumeScalar`.
+//! Live NodeAppeared/NodeRemoved come from a HAL property listener on
+//! `kAudioHardwarePropertyDevices` (see [`Inner::start`]); the HAL is asked
+//! to deliver on its own thread (run-loop set to NULL) so no CFRunLoop is
+//! needed.
 
 use coreaudio_sys::{
     kAudioDevicePropertyDeviceName, kAudioDevicePropertyMute,
     kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams,
     kAudioDevicePropertyVolumeScalar, kAudioHardwarePropertyDefaultOutputDevice,
-    kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal,
-    kAudioObjectPropertyScopeInput, kAudioObjectPropertyScopeOutput,
-    kAudioObjectSystemObject, AudioDeviceID, AudioObjectGetPropertyData,
+    kAudioHardwarePropertyDevices, kAudioHardwarePropertyRunLoop,
+    kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeInput,
+    kAudioObjectPropertyScopeOutput, kAudioObjectSystemObject, AudioDeviceID,
+    AudioObjectAddPropertyListener, AudioObjectGetPropertyData,
     AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectPropertyAddress,
-    AudioObjectSetPropertyData, AudioStreamID,
+    AudioObjectRemovePropertyListener, AudioObjectSetPropertyData, AudioStreamID,
+    CFRunLoopRef, OSStatus,
 };
 use soundworm_core::{
     error::{Result, SoundwormError},
     event::BackendEvent,
     node::{Node, NodeId, NodeKind},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::os::raw::c_void;
 use std::sync::{mpsc, Arc, Mutex};
 use std::{mem, ptr};
@@ -151,17 +154,105 @@ pub(crate) fn node_id_to_device_id(id: u64) -> std::result::Result<u32, Soundwor
     })
 }
 
+// Fan an event out to every live subscriber, pruning dead ones.
+fn broadcast(sinks: &Arc<Mutex<Vec<mpsc::SyncSender<BackendEvent>>>>, event: BackendEvent) {
+    if let Ok(mut g) = sinks.lock() {
+        g.retain(|tx| tx.try_send(event.clone()).is_ok());
+    }
+}
+
+// Context the HAL callback dereferences. Boxed and pinned behind a raw
+// pointer for the listener's lifetime (freed in `Inner::drop`).
+struct ListenerCtx {
+    sinks: Arc<Mutex<Vec<mpsc::SyncSender<BackendEvent>>>>,
+    prev: Mutex<HashSet<NodeId>>,
+}
+
+// HAL property listener for kAudioHardwarePropertyDevices: re-enumerate,
+// diff against the previously-seen id set, and emit NodeAppeared /
+// NodeRemoved for the delta.
+unsafe extern "C" fn devices_changed_proc(
+    _in_object: AudioObjectID,
+    _n_addresses: u32,
+    _addresses: *const AudioObjectPropertyAddress,
+    client: *mut c_void,
+) -> OSStatus {
+    if client.is_null() {
+        return 0;
+    }
+    // SAFETY: `client` is the ListenerCtx pointer registered in
+    // Inner::start; it outlives the listener (freed only after the
+    // listener is removed in Inner::drop).
+    let ctx = unsafe { &*(client as *const ListenerCtx) };
+    let current = hal_devices();
+    let cur_ids: HashSet<NodeId> = current.iter().map(|n| n.id.clone()).collect();
+    let Ok(mut prev) = ctx.prev.lock() else { return 0 };
+    for node in &current {
+        if !prev.contains(&node.id) {
+            broadcast(&ctx.sinks, BackendEvent::NodeAppeared(node.clone()));
+        }
+    }
+    for id in prev.iter() {
+        if !cur_ids.contains(id) {
+            broadcast(&ctx.sinks, BackendEvent::NodeRemoved(id.clone()));
+        }
+    }
+    *prev = cur_ids;
+    0
+}
+
 pub(crate) struct Inner {
     event_sinks: Arc<Mutex<Vec<mpsc::SyncSender<BackendEvent>>>>,
+    // The HAL holds a raw pointer to this context, so it must outlive the
+    // registration; freed in Drop after the listener is removed.
+    ctx: *mut ListenerCtx,
 }
+
+// SAFETY: `ctx` is only dereferenced by the HAL callback and freed in Drop
+// after the listener is removed; the data behind it is Send + Sync
+// (Arc<Mutex<..>> + Mutex<..>).
+unsafe impl Send for Inner {}
+// SAFETY: see the Send impl above.
+unsafe impl Sync for Inner {}
 
 impl Inner {
     pub fn start() -> Result<Self> {
-        // TODO(v0.5-mac): spawn a HAL listener thread (CFRunLoopRun +
-        // AudioObjectAddPropertyListener on kAudioHardwarePropertyDevices)
-        // to broadcast live NodeAppeared/NodeRemoved. enumerate_nodes
-        // already queries the HAL directly, so listing works without it.
-        Ok(Self { event_sinks: Arc::new(Mutex::new(Vec::new())) })
+        let event_sinks: Arc<Mutex<Vec<mpsc::SyncSender<BackendEvent>>>> =
+            Arc::new(Mutex::new(Vec::new()));
+        let initial: HashSet<NodeId> = hal_devices().into_iter().map(|n| n.id).collect();
+        let ctx = Box::into_raw(Box::new(ListenerCtx {
+            sinks: event_sinks.clone(),
+            prev: Mutex::new(initial),
+        }));
+
+        let sys = kAudioObjectSystemObject as AudioObjectID;
+        let devices_addr = address(kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal);
+        // SAFETY: FFI into the HAL with valid addresses and our owned ctx
+        // pointer; on failure we reclaim the Box before returning.
+        let st = unsafe {
+            // Deliver notifications on the HAL's own thread (run loop NULL)
+            // instead of requiring a CFRunLoop on this thread.
+            let rl_addr = address(kAudioHardwarePropertyRunLoop, kAudioObjectPropertyScopeGlobal);
+            let null_rl: CFRunLoopRef = ptr::null_mut();
+            AudioObjectSetPropertyData(
+                sys,
+                &rl_addr,
+                0,
+                ptr::null(),
+                mem::size_of::<CFRunLoopRef>() as u32,
+                &null_rl as *const CFRunLoopRef as *const c_void,
+            );
+            AudioObjectAddPropertyListener(sys, &devices_addr, Some(devices_changed_proc), ctx as *mut c_void)
+        };
+        if st != 0 {
+            // SAFETY: ctx came from Box::into_raw above and was never
+            // registered, so reclaiming it here is sound.
+            unsafe { drop(Box::from_raw(ctx)) };
+            return Err(SoundwormError::Backend(format!(
+                "coreaudio: AudioObjectAddPropertyListener failed: OSStatus {st}"
+            )));
+        }
+        Ok(Self { event_sinks, ctx })
     }
 
     pub fn subscribe(&self) -> mpsc::Receiver<BackendEvent> {
@@ -245,6 +336,24 @@ impl Inner {
             )));
         }
         Ok(())
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let sys = kAudioObjectSystemObject as AudioObjectID;
+        let addr = address(kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal);
+        // SAFETY: unregister the listener before reclaiming the ctx Box, so
+        // the HAL never dereferences a freed pointer.
+        unsafe {
+            AudioObjectRemovePropertyListener(
+                sys,
+                &addr,
+                Some(devices_changed_proc),
+                self.ctx as *mut c_void,
+            );
+            drop(Box::from_raw(self.ctx));
+        }
     }
 }
 
